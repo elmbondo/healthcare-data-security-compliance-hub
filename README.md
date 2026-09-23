@@ -23,7 +23,7 @@ A compliance and security monitoring platform for healthcare data, built around 
 
 ## Architecture
 
-1. **Ingestion.** QRadar and Guardium forward events to a Kafka topic (healthcare-security-events). DataStage's Kafka connector consumes them in continuous mode.
+1. **Ingestion.** QRadar and Guardium forward events to a Kafka topic (`healthcare-security-events`). DataStage's Kafka connector consumes them in continuous mode.
 2. **Transform (DataStage).** Parse raw JSON/CSV, cleanse and standardize fields, normalize schema across EHR, portal, and prescription sources, then run data quality checks.
 3. **Storage.** Cleansed data loads into watsonx.data using Iceberg tables. An immutable audit log is stored alongside it.
 4. **Threat detection (QRadar/Guardium).** QRadar flags anomalous behavior such as unauthorized chart views or bulk downloads. Guardium monitors database queries in real time and auto masks PHI for unauthorized roles.
@@ -34,6 +34,7 @@ A compliance and security monitoring platform for healthcare data, built around 
 
 pipeline/ Fidelmah's work: Kafka setup, mock event generator, pipeline
 validation logic, DataStage job exports
+
 security/ Joyline's work: QRadar rules, Guardium policies, configs
 dashboard/ Cognos dashboard exports and configuration
 docs/ Handoff notes and documentation
@@ -41,9 +42,10 @@ docs/ Handoff notes and documentation
 
 ## Status
 
-- [x] Local Kafka broker running (Docker, KRaft mode) with the healthcare-security-events topic
+- [x] Local Kafka broker running (Docker, KRaft mode) with the `healthcare-security-events` topic
 - [x] Mock event generator producing realistic QRadar/Guardium style events, including role based anomalies, off hours weighting, and malformed record injection
 - [x] Pipeline transform logic (parse, cleanse, normalize, quality check) validated locally in continuous consumption mode
+- [x] Event schema grounded in the real Sita Sector healthtech reference model (Patient, Encounter, LabResult, Referral), not an invented schema
 - [ ] DataStage job built in TechZone, connected to Kafka
 - [ ] watsonx.data Iceberg tables loaded
 - [ ] Compliance analytics queries (violation trends, risk tiers)

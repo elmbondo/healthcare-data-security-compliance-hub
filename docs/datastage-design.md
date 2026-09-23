@@ -1,70 +1,83 @@
-# DataStage job plan (before I actually have access)
+# DataStage job plan (v2, updated against the real reference model)
 
-Writing this up now while I wait on the environment, based on the logic
-I already proved out in pipeline_validator.py. Idea is that when I
-finally get into DataStage, I'm just rebuilding something I've already
-figured out, not designing from scratch under time pressure.
+Updating this after finding the actual healthtech reference codebase
+(Patient, Encounter, LabResult, Referral models, plus mdm_sync and
+referral_dispatcher services in the SitaSector files). My first version
+of this used a schema I basically made up (EHR/portal/prescription
+categories, invented patient_id format). This version is grounded in
+the real thing instead.
 
-## How the job should flow
+## What changed and why
 
-Kafka connector pulls from `healthcare-security-events` in continuous
-mode, same as I tested locally.
+- record_type now matches the actual model names: patient, encounter,
+  lab_result, referral. Not categories I invented.
+- record_id is a real UUID now, matching how patient_id, encounter_id,
+  result_id, and referral_id are actually defined in the reference code
+  (they're all UUIDFields).
+- Added facility_id, since basically every real model ties back to a
+  facility one way or another (registered_facility_id,
+  destination_facility_id).
+- Added golden_id. Turns out mdm_sync.py resolves duplicate patients
+  across facilities into a "golden" identity with a confidence score.
+  Unauthorized access to a golden (cross-facility) patient record is
+  arguably a bigger deal than a single-facility one, so this feeds into
+  how I'm scoring risk now.
+- Actions are grounded in what the real services actually do now
+  (view/edit_patient, mdm_resolve, view/edit/create_encounter,
+  view/create_lab_result, view_referral, dispatch_referral) instead of
+  actions I guessed at.
+- Also noticed referral_dispatcher.py sends the patient's actual name
+  across facilities as part of the referral summary. That's real PHI
+  moving between systems, which is exactly the kind of thing Guardium
+  is supposed to catch and mask for unauthorized roles.
 
-Then it goes through basically the same four stages as my Python script:
+## How the job flows
 
-1. **Parse** - decode the JSON, send anything malformed to a reject link
-   instead of crashing the job
-2. **Cleanse** - fix up timestamps (UTC, ISO format), lowercase the
-   user_role, normalize record_type casing, make sure authorized is an
-   actual boolean and not a string
-3. **Normalize** - map everything into one consistent schema regardless
-   of which source it came from, add a source_system column
-4. **Quality check** - flag records missing required fields or with
-   invalid roles/types. These get routed to a "flagged" link, not just
-   dropped
+Same four stages as before, just running against the updated fields:
+
+1. Parse - decode JSON, malformed stuff goes to a reject link
+2. Cleanse - standardize timestamps to UTC, lowercase role/record_type/action
+3. Normalize - map everything into one common schema, add source_system
+4. Quality check - flag missing fields, invalid roles, invalid
+   record_type, invalid action
 
 Then it loads into watsonx.data as Iceberg tables.
 
-Basically: parse_event() → Kafka source + parse stage, cleanse_event()
-→ transformer stage, normalize_event() → another transformer/modify
-stage, quality_check() → a constraint stage with a reject link. So the
-work isn't really "design DataStage from zero," it's "translate what I
-already built."
-
 ## Tables in watsonx.data
 
-**security_events** - the main table. event_id, event_timestamp,
-user_id, user_role, action, patient_id, record_type, authorized,
-source_system, ingested_at, and a quality_status column (CLEAN or
-FLAGGED). Partitioned by date so trend queries stay fast.
+security_events - event_id, event_timestamp, user_id, user_role,
+action, record_type, record_id, facility_id, golden_id, authorized,
+source_system, ingested_at, quality_status. Partitioned by date.
 
-**audit_log** - append-only, every event that comes through whether
-clean or flagged. Same columns plus risk_tier and is_violation, since
-this is what the compliance analytics side actually queries against.
+audit_log - same fields, append-only, plus risk_tier and is_violation,
+which is what the analytics queries actually run against.
 
-## Queries the dashboard will need
+## Risk tier, updated
 
-Wrote these out now so building the actual Cognos dashboard later is
-just wiring it up, not figuring out the SQL under deadline pressure.
+- High: unauthorized, and either the action is mdm_resolve or
+  dispatch_referral, or the record has a golden_id (cross-facility
+  identity)
+- Medium: any other unauthorized action
+- Low: authorized
 
-- Violation count by day (for the trend chart)
-- Count grouped by risk_tier (for the risk breakdown)
+Already built and working in pipeline_validator.py's
+compute_risk_tier(), tested against mock data.
+
+## Queries the dashboard needs
+
+Same list as before, just pointed at the updated columns:
+
+- Violation count by day
+- Count grouped by risk_tier
 - Top 10 unauthorized actions
-- Most recent 25 high-risk events, for a live incident feed
+- Most recent 25 high-risk events
 
-## Risk tier, roughly
+## Still not sorted
 
-- High: unauthorized bulk_download or export_records
-- Medium: any other unauthorized action, or authorized bulk_download/export_records
-- Low: everything else authorized (logins, normal views, etc.)
-
-Might end up computing this in DataStage itself, or as a view in
-watsonx.data - will decide once I see what's easier to show live in the
-demo.
-
-## Still unresolved
-
-- Kafka connectivity from the DataStage environment, waiting on Peter
-- Haven't confirmed the sector reference table doesn't want something
-  different from this schema
-- Haven't confirmed Cognos is actually available once CP4D is up
+- Kafka connectivity from wherever DataStage ends up running, waiting
+  on Peter/AskTZ
+- Whether the IBMxMCStudioProgram cohort repo replaces or sits
+  alongside the team repo
+- Haven't looked at settings.py or the api/serializers and api/views
+  files yet, might be worth a quick check in case they show field
+  names or validation rules I should also be matching

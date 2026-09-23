@@ -1,66 +1,53 @@
 """
-Local Pipeline Validator (DataStage logic dry-run)
-----------------------------------------------------
-Consumes events from the local Kafka topic and runs them through the
-same conceptual steps the real DataStage job will perform:
-
-    1. Parse       - decode raw JSON
-    2. Cleanse      - standardize/validate field formats
-    3. Normalize    - map to a common schema (EHR / portal / prescription
-                       sources all land in one shape)
-    4. Quality Check - flag or drop incomplete/invalid records
-
-This lets the transform logic be proven locally before it's rebuilt
-inside DataStage's visual job designer.
+Local Pipeline Validator (DataStage logic dry-run) - v2
+Updated to validate against the real Sita Sector healthtech schema
+(record_type/record_id/facility_id/golden_id) instead of the earlier
+generic invented fields.
 
 Setup:
     pip install kafka-python
 
 Usage:
     python pipeline_validator.py
-    python pipeline_validator.py --max-events 100   # stop after N events
-    python pipeline_validator.py --from-beginning   # replay topic from start
+    python pipeline_validator.py --max-events 100
+    python pipeline_validator.py --from-beginning
 """
 
 import argparse
 import json
 from datetime import datetime, timezone
 
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaConsumer
 
-# ---------------------------------------------------------------------------
-# Schema definition used for normalization + quality checks
-# ---------------------------------------------------------------------------
+# Schema definition, grounded in the real reference models
 
 REQUIRED_FIELDS = ["event_id", "timestamp", "user_id", "user_role",
-                    "action", "patient_id", "record_type", "authorized"]
+                    "action", "record_type", "record_id", "facility_id", "authorized"]
 
 VALID_ROLES = {"physician", "nurse", "lab_tech", "billing_clerk", "admin", "pharmacist"}
-VALID_RECORD_TYPES = {"EHR", "prescription", "lab_result", "portal_auth", "billing"}
+VALID_RECORD_TYPES = {"patient", "encounter", "lab_result", "referral"}
+VALID_ACTIONS = {
+    "view_patient", "edit_patient", "mdm_resolve",
+    "view_encounter", "edit_encounter", "create_encounter",
+    "view_lab_result", "create_lab_result",
+    "view_referral", "dispatch_referral",
+}
 
 
-# ---------------------------------------------------------------------------
 # Step 1: Parse
-# ---------------------------------------------------------------------------
 
 def parse_event(raw_bytes: bytes):
-    """Decode raw Kafka message bytes into a dict. Returns (event, error)."""
     try:
         event = json.loads(raw_bytes.decode("utf-8"))
         return event, None
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return None, f"parse_error: {e}"
 
-
-# ---------------------------------------------------------------------------
 # Step 2: Cleanse / standardize
-# ---------------------------------------------------------------------------
 
 def cleanse_event(event: dict):
-    """Standardize field formats in place. Returns list of cleanse notes."""
     notes = []
 
-    # Standardize timestamp to UTC ISO-8601 with 'Z' suffix
     ts = event.get("timestamp")
     if ts:
         try:
@@ -71,47 +58,42 @@ def cleanse_event(event: dict):
         except ValueError:
             notes.append(f"unparseable_timestamp: {ts!r}")
 
-    # Standardize user_role casing
     if "user_role" in event and isinstance(event["user_role"], str):
         event["user_role"] = event["user_role"].strip().lower()
 
-    # Standardize record_type casing to match schema (title-ish, but EHR stays upper)
     if "record_type" in event and isinstance(event["record_type"], str):
-        rt = event["record_type"].strip()
-        event["record_type"] = "EHR" if rt.upper() == "EHR" else rt.lower()
+        event["record_type"] = event["record_type"].strip().lower()
 
-    # Coerce authorized to a real bool if it arrived as a string
+    if "action" in event and isinstance(event["action"], str):
+        event["action"] = event["action"].strip().lower()
+
     if isinstance(event.get("authorized"), str):
         event["authorized"] = event["authorized"].strip().lower() in ("true", "1", "yes")
 
     return notes
 
 
-# ---------------------------------------------------------------------------
 # Step 3: Normalize schema
-# ---------------------------------------------------------------------------
 
 def normalize_event(event: dict) -> dict:
-    """Map to a common target schema regardless of source system quirks."""
     return {
         "event_id": event.get("event_id"),
         "timestamp": event.get("timestamp"),
         "user_id": event.get("user_id"),
         "user_role": event.get("user_role"),
         "action": event.get("action"),
-        "patient_id": event.get("patient_id"),
         "record_type": event.get("record_type"),
+        "record_id": event.get("record_id"),
+        "facility_id": event.get("facility_id"),
+        "golden_id": event.get("golden_id"),
         "authorized": event.get("authorized"),
         "source_system": event.get("source_system", "kafka_stream"),
     }
 
 
-# ---------------------------------------------------------------------------
 # Step 4: Quality check
-# ---------------------------------------------------------------------------
 
 def quality_check(event: dict):
-    """Returns a list of quality issues found. Empty list = clean record."""
     issues = []
 
     for field in REQUIRED_FIELDS:
@@ -124,18 +106,28 @@ def quality_check(event: dict):
     if event.get("record_type") and event["record_type"] not in VALID_RECORD_TYPES:
         issues.append(f"invalid_record_type:{event['record_type']}")
 
+    if event.get("action") and event["action"] not in VALID_ACTIONS:
+        issues.append(f"invalid_action:{event['action']}")
+
     if event.get("authorized") is not None and not isinstance(event["authorized"], bool):
         issues.append("invalid_authorized_type")
 
     return issues
 
 
-# ---------------------------------------------------------------------------
+# Risk tier (draft logic, matches datastage-design.md)
+
+def compute_risk_tier(event: dict) -> str:
+    if event.get("authorized"):
+        return "low"
+    if event.get("action") in ("mdm_resolve", "dispatch_referral") or event.get("golden_id"):
+        return "high"
+    return "medium"
+
+
 # Pipeline runner
-# ---------------------------------------------------------------------------
 
 def run_pipeline(raw_bytes: bytes):
-    """Runs one message through all four stages. Returns a result dict."""
     event, parse_error = parse_event(raw_bytes)
     if parse_error:
         return {"status": "DROPPED", "stage": "parse", "issues": [parse_error], "event": None}
@@ -143,11 +135,9 @@ def run_pipeline(raw_bytes: bytes):
     cleanse_notes = cleanse_event(event)
     normalized = normalize_event(event)
     issues = quality_check(normalized)
+    normalized["risk_tier"] = compute_risk_tier(normalized)
 
-    if issues:
-        status = "FLAGGED"
-    else:
-        status = "CLEAN"
+    status = "FLAGGED" if issues else "CLEAN"
 
     return {
         "status": status,
@@ -162,8 +152,8 @@ def main():
     parser.add_argument("--bootstrap-server", default="localhost:9092")
     parser.add_argument("--topic", default="healthcare-security-events")
     parser.add_argument("--group-id", default="pipeline-validator")
-    parser.add_argument("--max-events", type=int, default=None, help="Stop after N events (default: run until Ctrl+C)")
-    parser.add_argument("--from-beginning", action="store_true", help="Replay the topic from the start")
+    parser.add_argument("--max-events", type=int, default=None)
+    parser.add_argument("--from-beginning", action="store_true")
     args = parser.parse_args()
 
     consumer = KafkaConsumer(
