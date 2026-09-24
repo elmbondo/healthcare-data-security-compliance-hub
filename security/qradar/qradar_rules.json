@@ -1,0 +1,197 @@
+{
+  "ruleset_name": "Healthcare_EHR_Security_Compliance_Ruleset",
+  "version": "7.5.0",
+  "author": "Joyline Kamoing (Cybersecurity Track)",
+  "description": "IBM QRadar SIEM Custom Rule Engine (CRE) rules detecting unauthorized EHR access, bulk exfiltration, PHI snooping, and off-hours anomalies.",
+  "rules": [
+    {
+      "id": "QR-RULE-101",
+      "name": "EHR: Unauthorized Staff Viewing Patient Chart",
+      "category": "Healthcare Compliance / Access Violation",
+      "enabled": true,
+      "severity": 7,
+      "credibility": 8,
+      "relevance": 9,
+      "description": "Triggers when a healthcare staff member attempts to access or view an EHR patient chart without the required clinical role permissions or active care-team assignment.",
+      "rule_type": "Event",
+      "conditions": [
+        {
+          "field": "action",
+          "operator": "EQUALS_ANY",
+          "values": ["view_chart", "edit_chart"]
+        },
+        {
+          "field": "user_role",
+          "operator": "NOT_IN",
+          "values": ["physician", "nurse"]
+        },
+        {
+          "field": "authorized",
+          "operator": "EQUALS",
+          "values": [false]
+        }
+      ],
+      "actions": {
+        "dispatch_offense": true,
+        "offense_name": "Unauthorized Patient Chart Access by Non-Clinical Staff ({user_role}: {user_id})",
+        "index_by": ["user_id", "patient_id"],
+        "severity": 7,
+        "tag_compliance": ["HIPAA Section 164.312(a)(1)", "HITECH", "Minimum Necessary Rule"],
+        "emit_kafka_event": true
+      }
+    },
+    {
+      "id": "QR-RULE-102",
+      "name": "EHR: Bulk Patient Record Download / Exfiltration Anomaly",
+      "category": "Data Loss Prevention / Mass Exfiltration",
+      "enabled": true,
+      "severity": 9,
+      "credibility": 9,
+      "relevance": 10,
+      "description": "Detects anomalous volume of patient record exports or downloads exceeding threshold (e.g., >5 downloads within 5 minutes or any unauthorized bulk action).",
+      "rule_type": "Event / Rate Anomaly",
+      "conditions": [
+        {
+          "field": "action",
+          "operator": "EQUALS_ANY",
+          "values": ["bulk_download", "export_records"]
+        },
+        {
+          "operator": "OR",
+          "sub_conditions": [
+            {
+              "field": "authorized",
+              "operator": "EQUALS",
+              "values": [false]
+            },
+            {
+              "field": "event_count",
+              "operator": "GREATER_THAN_OR_EQUAL",
+              "threshold": 5,
+              "time_window_seconds": 300,
+              "group_by": "user_id"
+            }
+          ]
+        }
+      ],
+      "actions": {
+        "dispatch_offense": true,
+        "offense_name": "Mass PHI Data Exfiltration / Bulk Download Detected ({user_id})",
+        "index_by": ["user_id"],
+        "severity": 9,
+        "tag_compliance": ["HIPAA Section 164.312(b)", "NIST SP 800-66", "Breach Notification Rule"],
+        "emit_kafka_event": true
+      }
+    },
+    {
+      "id": "QR-RULE-103",
+      "name": "EHR: VIP or High-Profile Patient Record Snooping",
+      "category": "Insider Threat / Privacy Violation",
+      "enabled": true,
+      "severity": 8,
+      "credibility": 8,
+      "relevance": 9,
+      "description": "Detects staff accessing high-profile, VIP, or coworker patient records outside their assigned clinical care responsibilities.",
+      "rule_type": "Event / Reference Set Match",
+      "conditions": [
+        {
+          "field": "action",
+          "operator": "EQUALS_ANY",
+          "values": ["view_chart", "view_prescription", "view_lab_result", "query_patient_search"]
+        },
+        {
+          "field": "patient_id",
+          "operator": "IN_REFERENCE_SET",
+          "reference_set_name": "VIP_AND_RESTRICTED_PATIENTS"
+        },
+        {
+          "field": "user_id",
+          "operator": "NOT_IN_REFERENCE_MAP",
+          "reference_map_name": "PATIENT_ASSIGNED_CARE_TEAM"
+        }
+      ],
+      "actions": {
+        "dispatch_offense": true,
+        "offense_name": "VIP Patient Privacy Breach / Snooping Alert ({user_id} on {patient_id})",
+        "index_by": ["patient_id", "user_id"],
+        "severity": 8,
+        "tag_compliance": ["HIPAA Section 164.502", "Privacy Rule"],
+        "emit_kafka_event": true
+      }
+    },
+    {
+      "id": "QR-RULE-104",
+      "name": "EHR: Off-Hours High-Volume EHR Query Anomaly",
+      "category": "Behavioral Anomaly / Off-Hours Access",
+      "enabled": true,
+      "severity": 7,
+      "credibility": 7,
+      "relevance": 8,
+      "description": "Flags unusual spikes in patient chart lookups occurring during off-hours (22:00-05:00 UTC) without authorized night shift roster.",
+      "rule_type": "Time-Windowed Behavioral Anomaly",
+      "conditions": [
+        {
+          "field": "hour_of_day_utc",
+          "operator": "IN_RANGE",
+          "values": [22, 23, 0, 1, 2, 3, 4]
+        },
+        {
+          "field": "action",
+          "operator": "EQUALS_ANY",
+          "values": ["view_chart", "query_patient_search", "bulk_download", "export_records"]
+        },
+        {
+          "field": "user_role",
+          "operator": "NOT_IN",
+          "values": ["night_attending_physician", "emergency_nurse"]
+        },
+        {
+          "field": "authorized",
+          "operator": "EQUALS",
+          "values": [false]
+        }
+      ],
+      "actions": {
+        "dispatch_offense": true,
+        "offense_name": "Suspicious Off-Hours EHR Access Anomaly ({user_id})",
+        "index_by": ["user_id"],
+        "severity": 7,
+        "tag_compliance": ["HIPAA Section 164.308(a)(1)(ii)(D)", "Audit Review"],
+        "emit_kafka_event": true
+      }
+    },
+    {
+      "id": "QR-RULE-105",
+      "name": "EHR: Multi-Patient Sequential Crawling / Automated Scraping",
+      "category": "Automated Abuse / Scraping",
+      "enabled": true,
+      "severity": 8,
+      "credibility": 8,
+      "relevance": 9,
+      "description": "Identifies rapid sequential lookups across distinct patient IDs (e.g. >5 unique patients in 60 seconds), indicating automated scraping or unauthorized discovery.",
+      "rule_type": "Behavioral Statistical / Sliding Window",
+      "conditions": [
+        {
+          "field": "action",
+          "operator": "EQUALS_ANY",
+          "values": ["view_chart", "query_patient_search", "view_prescription"]
+        },
+        {
+          "field": "distinct_patient_count",
+          "operator": "GREATER_THAN_OR_EQUAL",
+          "threshold": 5,
+          "time_window_seconds": 60,
+          "group_by": "user_id"
+        }
+      ],
+      "actions": {
+        "dispatch_offense": true,
+        "offense_name": "Rapid Multi-Patient Record Scraping Detected ({user_id})",
+        "index_by": ["user_id"],
+        "severity": 8,
+        "tag_compliance": ["HIPAA Section 164.312(e)(1)", "Transmission Security"],
+        "emit_kafka_event": true
+      }
+    }
+  ]
+}

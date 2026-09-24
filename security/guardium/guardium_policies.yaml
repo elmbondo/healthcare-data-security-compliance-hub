@@ -1,0 +1,109 @@
+# ==============================================================================
+# IBM Security Guardium Database Activity Monitoring (DAM) & Data Protection Policies
+# Target: IBM Security Guardium Data Protection 11.x / 12.x
+# Author: Joyline Kamoing (Cybersecurity Track)
+# Description: Guardium DAM security policies for real-time monitoring and dynamic PHI masking
+# ==============================================================================
+
+version: "12.0"
+policy_name: "HIPAA_Healthcare_DB_Protection_And_Masking_Policy"
+description: "Real-time SQL monitoring, privileged user auditing, and dynamic PHI masking across clinical databases."
+
+rules:
+  - rule_name: "Guardium_DAM_01: Direct Access to Restricted PHI Tables"
+    rule_type: "ACCESS_RULE"
+    severity: "HIGH"
+    enabled: true
+    criteria:
+      objects:
+        - "ehr_patients"
+        - "clinical_encounters"
+        - "patient_medical_history"
+        - "prescriptions"
+      commands:
+        - "SELECT"
+        - "INSERT"
+        - "UPDATE"
+        - "DELETE"
+      unauthorized_db_users:
+        - "reporting_readonly"
+        - "guest_user"
+        - "etl_temp_user"
+    actions:
+      - action: "ALERT_AND_LOG"
+        notification_type: "SYSLOG_QRADAR"
+      - action: "EMIT_KAFKA_SECURITY_EVENT"
+        topic: "healthcare-security-events"
+
+  - rule_name: "Guardium_DAM_02: Dynamic PHI Masking - Social Security Number (SSN)"
+    rule_type: "DYNAMIC_DATA_MASKING"
+    severity: "MEDIUM"
+    enabled: true
+    criteria:
+      target_fields:
+        - "ssn"
+        - "social_security_number"
+        - "tax_id"
+      authorized_roles:
+        - "billing_clerk"
+        - "compliance_officer"
+        - "admin"
+    masking_strategy:
+      type: "PARTIAL_REDACT"
+      pattern: "***-**-{last_4}"
+      unauthorized_replacement: "XXX-XX-XXXX"
+    actions:
+      - action: "TRANSFORM_RESULTSET_INLINE"
+      - action: "LOG_MASKING_EVENT"
+
+  - rule_name: "Guardium_DAM_03: Dynamic PHI Masking - Medical History & Clinical Diagnosis"
+    rule_type: "DYNAMIC_DATA_MASKING"
+    severity: "HIGH"
+    enabled: true
+    criteria:
+      target_fields:
+        - "medical_history"
+        - "diagnosis_code"
+        - "clinical_notes"
+        - "psychiatric_evaluation"
+      authorized_roles:
+        - "physician"
+        - "nurse"
+    masking_strategy:
+      type: "FULL_REDACT"
+      replacement: "[RESTRICTED MEDICAL HISTORY - CLINICAL ROLE REQUIRED]"
+    actions:
+      - action: "TRANSFORM_RESULTSET_INLINE"
+      - action: "LOG_MASKING_EVENT"
+
+  - rule_name: "Guardium_DAM_04: SQL Injection & Malicious Signature Detection"
+    rule_type: "EXTRUSION_RULE"
+    severity: "CRITICAL"
+    enabled: true
+    criteria:
+      sql_patterns:
+        - "(?i)(\\bOR\\b\\s+['\"]?1['\"]?\\s*=\\s*['\"]?1)"
+        - "(?i)(\\bUNION\\b\\s+\\bSELECT\\b)"
+        - "(?i)(\\bDROP\\b\\s+\\bTABLE\\b)"
+        - "(?i)(\\bINFORMATION_SCHEMA\\b)"
+        - "(?i)(--|;--|/\\*)"
+    actions:
+      - action: "TERMINATE_SESSION"
+      - action: "ALERT_IMMEDIATE"
+        severity: "CRITICAL"
+      - action: "EMIT_KAFKA_SECURITY_EVENT"
+        topic: "healthcare-security-events"
+
+  - rule_name: "Guardium_DAM_05: Bulk Database Extract / Table Dump Monitoring"
+    rule_type: "RATE_MONITORING_RULE"
+    severity: "HIGH"
+    enabled: true
+    criteria:
+      commands:
+        - "SELECT"
+      row_count_threshold: 100
+      time_window_seconds: 60
+    actions:
+      - action: "ALERT_AND_LOG"
+      - action: "TAG_INCIDENT"
+        tag: "HIPAA Section 164.312(b)"

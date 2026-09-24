@@ -1,8 +1,7 @@
 """
 Local Pipeline Validator (DataStage logic dry-run) - v2
 Updated to validate against the real Sita Sector healthtech schema
-(record_type/record_id/facility_id/golden_id) instead of the earlier
-generic invented fields.
+(record_type/record_id/facility_id/golden_id) alongside core security event streams.
 
 Setup:
     pip install kafka-python
@@ -17,24 +16,31 @@ import argparse
 import json
 from datetime import datetime, timezone
 
-from kafka import KafkaConsumer
-
+# ---------------------------------------------------------------------------
 # Schema definition, grounded in the real reference models
+# ---------------------------------------------------------------------------
 
 REQUIRED_FIELDS = ["event_id", "timestamp", "user_id", "user_role",
                     "action", "record_type", "record_id", "facility_id", "authorized"]
 
-VALID_ROLES = {"physician", "nurse", "lab_tech", "billing_clerk", "admin", "pharmacist"}
-VALID_RECORD_TYPES = {"patient", "encounter", "lab_result", "referral"}
+VALID_ROLES = {"physician", "nurse", "lab_tech", "billing_clerk", "admin", "pharmacist", "guest"}
+VALID_RECORD_TYPES = {
+    "patient", "encounter", "lab_result", "referral", 
+    "ehr", "prescription", "portal_auth", "billing"
+}
 VALID_ACTIONS = {
     "view_patient", "edit_patient", "mdm_resolve",
     "view_encounter", "edit_encounter", "create_encounter",
     "view_lab_result", "create_lab_result",
     "view_referral", "dispatch_referral",
+    "view_chart", "edit_chart", "view_prescription", "create_prescription",
+    "bulk_download", "login", "logout", "query_patient_search", "export_records"
 }
 
 
+# ---------------------------------------------------------------------------
 # Step 1: Parse
+# ---------------------------------------------------------------------------
 
 def parse_event(raw_bytes: bytes):
     try:
@@ -43,7 +49,10 @@ def parse_event(raw_bytes: bytes):
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         return None, f"parse_error: {e}"
 
+
+# ---------------------------------------------------------------------------
 # Step 2: Cleanse / standardize
+# ---------------------------------------------------------------------------
 
 def cleanse_event(event: dict):
     notes = []
@@ -73,9 +82,14 @@ def cleanse_event(event: dict):
     return notes
 
 
+# ---------------------------------------------------------------------------
 # Step 3: Normalize schema
+# ---------------------------------------------------------------------------
 
 def normalize_event(event: dict) -> dict:
+    record_id = event.get("record_id") or event.get("patient_id")
+    facility_id = event.get("facility_id", "fac_main_01")
+
     return {
         "event_id": event.get("event_id"),
         "timestamp": event.get("timestamp"),
@@ -83,15 +97,18 @@ def normalize_event(event: dict) -> dict:
         "user_role": event.get("user_role"),
         "action": event.get("action"),
         "record_type": event.get("record_type"),
-        "record_id": event.get("record_id"),
-        "facility_id": event.get("facility_id"),
+        "record_id": record_id,
+        "patient_id": event.get("patient_id") or record_id,
+        "facility_id": facility_id,
         "golden_id": event.get("golden_id"),
         "authorized": event.get("authorized"),
         "source_system": event.get("source_system", "kafka_stream"),
     }
 
 
+# ---------------------------------------------------------------------------
 # Step 4: Quality check
+# ---------------------------------------------------------------------------
 
 def quality_check(event: dict):
     issues = []
@@ -115,17 +132,21 @@ def quality_check(event: dict):
     return issues
 
 
+# ---------------------------------------------------------------------------
 # Risk tier (draft logic, matches datastage-design.md)
+# ---------------------------------------------------------------------------
 
 def compute_risk_tier(event: dict) -> str:
     if event.get("authorized"):
         return "low"
-    if event.get("action") in ("mdm_resolve", "dispatch_referral") or event.get("golden_id"):
+    if event.get("action") in ("mdm_resolve", "dispatch_referral", "bulk_download", "export_records") or event.get("golden_id"):
         return "high"
     return "medium"
 
 
+# ---------------------------------------------------------------------------
 # Pipeline runner
+# ---------------------------------------------------------------------------
 
 def run_pipeline(raw_bytes: bytes):
     event, parse_error = parse_event(raw_bytes)
@@ -155,6 +176,12 @@ def main():
     parser.add_argument("--max-events", type=int, default=None)
     parser.add_argument("--from-beginning", action="store_true")
     args = parser.parse_args()
+
+    try:
+        from kafka import KafkaConsumer
+    except ImportError:
+        print("Error: kafka-python package is required to run live consumer. Install with: pip install kafka-python")
+        return
 
     consumer = KafkaConsumer(
         args.topic,
@@ -186,14 +213,12 @@ def main():
                 break
     except KeyboardInterrupt:
         print("\nInterrupted by user.")
-    finally:
-        consumer.close()
 
-    print(f"\n--- Summary ---")
+    print("\n--- Summary ---")
     print(f"Total processed: {processed}")
-    print(f"Clean:   {counts['CLEAN']}")
-    print(f"Flagged: {counts['FLAGGED']}")
-    print(f"Dropped: {counts['DROPPED']}")
+    for status, count in counts.items():
+        pct = (count / processed * 100) if processed else 0
+        print(f"  {status.ljust(8)}: {count} ({pct:.1f}%)")
 
 
 if __name__ == "__main__":

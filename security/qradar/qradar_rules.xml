@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- IBM QRadar SIEM Custom Rule Engine (CRE) Export -->
+<!-- Target: IBM QRadar SIEM 7.5.0+ -->
+<!-- Author: Joyline Kamoing (Cybersecurity Track) -->
+<custom_ruleset name="Healthcare_EHR_Security_Compliance_Ruleset" version="7.5.0">
+  <description>QRadar CRE rules detecting anomalous healthcare access, bulk downloads, and PHI snooping.</description>
+  
+  <rule id="QR-RULE-101" name="EHR: Unauthorized Staff Viewing Patient Chart" enabled="true">
+    <rule_group>Healthcare Compliance</rule_group>
+    <severity>7</severity>
+    <credibility>8</credibility>
+    <relevance>9</relevance>
+    <test_definition>
+      <test type="event_property_match">
+        <property name="action" operator="EQUALS_ANY">
+          <value>view_chart</value>
+          <value>edit_chart</value>
+        </property>
+      </test>
+      <test type="event_property_match">
+        <property name="user_role" operator="NOT_IN">
+          <value>physician</value>
+          <value>nurse</value>
+        </property>
+      </test>
+      <test type="event_property_match">
+        <property name="authorized" operator="EQUALS">
+          <value>false</value>
+        </property>
+      </test>
+    </test_definition>
+    <actions>
+      <dispatch_offense index_by="user_id,patient_id">
+        <name>Unauthorized Patient Chart Access by Non-Clinical Staff ({user_role}: {user_id})</name>
+      </dispatch_offense>
+      <tag>HIPAA Section 164.312(a)(1)</tag>
+    </actions>
+  </rule>
+
+  <rule id="QR-RULE-102" name="EHR: Bulk Patient Record Download / Exfiltration Anomaly" enabled="true">
+    <rule_group>Data Loss Prevention</rule_group>
+    <severity>9</severity>
+    <credibility>9</credibility>
+    <relevance>10</relevance>
+    <test_definition>
+      <test type="event_property_match">
+        <property name="action" operator="EQUALS_ANY">
+          <value>bulk_download</value>
+          <value>export_records</value>
+        </property>
+      </test>
+      <test type="or_group">
+        <test type="event_property_match">
+          <property name="authorized" operator="EQUALS">
+            <value>false</value>
+          </property>
+        </test>
+        <test type="threshold_match">
+          <threshold count="5" interval_seconds="300" group_by="user_id" />
+        </test>
+      </test>
+    </test_definition>
+    <actions>
+      <dispatch_offense index_by="user_id">
+        <name>Mass PHI Data Exfiltration / Bulk Download Detected ({user_id})</name>
+      </dispatch_offense>
+      <tag>HIPAA Section 164.312(b)</tag>
+      <tag>Breach Notification Rule</tag>
+    </actions>
+  </rule>
+
+  <rule id="QR-RULE-103" name="EHR: VIP or High-Profile Patient Record Snooping" enabled="true">
+    <rule_group>Insider Threat</rule_group>
+    <severity>8</severity>
+    <credibility>8</credibility>
+    <relevance>9</relevance>
+    <test_definition>
+      <test type="event_property_match">
+        <property name="action" operator="EQUALS_ANY">
+          <value>view_chart</value>
+          <value>view_prescription</value>
+          <value>view_lab_result</value>
+          <value>query_patient_search</value>
+        </property>
+      </test>
+      <test type="reference_set_match">
+        <property name="patient_id" set_name="VIP_AND_RESTRICTED_PATIENTS" match="true" />
+      </test>
+      <test type="reference_map_match">
+        <property name="user_id" map_name="PATIENT_ASSIGNED_CARE_TEAM" key="patient_id" match="false" />
+      </test>
+    </test_definition>
+    <actions>
+      <dispatch_offense index_by="patient_id,user_id">
+        <name>VIP Patient Privacy Breach / Snooping Alert ({user_id} on {patient_id})</name>
+      </dispatch_offense>
+      <tag>HIPAA Section 164.502</tag>
+    </actions>
+  </rule>
+
+  <rule id="QR-RULE-104" name="EHR: Off-Hours High-Volume EHR Query Anomaly" enabled="true">
+    <rule_group>Behavioral Anomaly</rule_group>
+    <severity>7</severity>
+    <credibility>7</credibility>
+    <relevance>8</relevance>
+    <test_definition>
+      <test type="time_match">
+        <hours_utc>22,23,0,1,2,3,4</hours_utc>
+      </test>
+      <test type="event_property_match">
+        <property name="action" operator="EQUALS_ANY">
+          <value>view_chart</value>
+          <value>query_patient_search</value>
+          <value>bulk_download</value>
+          <value>export_records</value>
+        </property>
+      </test>
+      <test type="event_property_match">
+        <property name="user_role" operator="NOT_IN">
+          <value>night_attending_physician</value>
+          <value>emergency_nurse</value>
+        </property>
+      </test>
+      <test type="event_property_match">
+        <property name="authorized" operator="EQUALS">
+          <value>false</value>
+        </property>
+      </test>
+    </test_definition>
+    <actions>
+      <dispatch_offense index_by="user_id">
+        <name>Suspicious Off-Hours EHR Access Anomaly ({user_id})</name>
+      </dispatch_offense>
+      <tag>HIPAA Section 164.308(a)(1)(ii)(D)</tag>
+    </actions>
+  </rule>
+
+  <rule id="QR-RULE-105" name="EHR: Multi-Patient Sequential Crawling / Automated Scraping" enabled="true">
+    <rule_group>Automated Abuse</rule_group>
+    <severity>8</severity>
+    <credibility>8</credibility>
+    <relevance>9</relevance>
+    <test_definition>
+      <test type="event_property_match">
+        <property name="action" operator="EQUALS_ANY">
+          <value>view_chart</value>
+          <value>query_patient_search</value>
+          <value>view_prescription</value>
+        </property>
+      </test>
+      <test type="distinct_count_threshold">
+        <property name="patient_id" distinct_count="5" interval_seconds="60" group_by="user_id" />
+      </test>
+    </test_definition>
+    <actions>
+      <dispatch_offense index_by="user_id">
+        <name>Rapid Multi-Patient Record Scraping Detected ({user_id})</name>
+      </dispatch_offense>
+      <tag>HIPAA Section 164.312(e)(1)</tag>
+    </actions>
+  </rule>
+</custom_ruleset>

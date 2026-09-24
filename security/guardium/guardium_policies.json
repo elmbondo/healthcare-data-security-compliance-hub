@@ -1,0 +1,66 @@
+{
+  "version": "12.0",
+  "policy_name": "HIPAA_Healthcare_DB_Protection_And_Masking_Policy",
+  "author": "Joyline Kamoing (Cybersecurity Track)",
+  "description": "Real-time SQL monitoring, privileged user auditing, and dynamic PHI masking across clinical databases.",
+  "policies": [
+    {
+      "id": "GD-POL-01",
+      "name": "Direct Access to Restricted PHI Tables",
+      "type": "ACCESS_RULE",
+      "severity": "HIGH",
+      "enabled": true,
+      "monitored_tables": ["ehr_patients", "clinical_encounters", "patient_medical_history", "prescriptions"],
+      "monitored_commands": ["SELECT", "INSERT", "UPDATE", "DELETE"],
+      "unauthorized_users": ["reporting_readonly", "guest_user", "etl_temp_user"],
+      "action": "ALERT_AND_FORWARD_KAFKA"
+    },
+    {
+      "id": "GD-POL-02",
+      "name": "Dynamic PHI Masking - Social Security Number (SSN)",
+      "type": "DYNAMIC_DATA_MASKING",
+      "severity": "MEDIUM",
+      "enabled": true,
+      "target_fields": ["ssn", "social_security_number", "tax_id"],
+      "authorized_roles": ["billing_clerk", "compliance_officer", "admin"],
+      "masking_pattern": "***-**-{last_4}",
+      "unauthorized_fallback": "XXX-XX-XXXX",
+      "action": "TRANSFORM_INLINE"
+    },
+    {
+      "id": "GD-POL-03",
+      "name": "Dynamic PHI Masking - Medical History & Clinical Notes",
+      "type": "DYNAMIC_DATA_MASKING",
+      "severity": "HIGH",
+      "enabled": true,
+      "target_fields": ["medical_history", "diagnosis_code", "clinical_notes", "psychiatric_evaluation"],
+      "authorized_roles": ["physician", "nurse"],
+      "masking_replacement": "[RESTRICTED MEDICAL HISTORY - CLINICAL ROLE REQUIRED]",
+      "action": "TRANSFORM_INLINE"
+    },
+    {
+      "id": "GD-POL-04",
+      "name": "SQL Injection & Malicious Signature Detection",
+      "type": "EXTRUSION_RULE",
+      "severity": "CRITICAL",
+      "enabled": true,
+      "regex_signatures": [
+        "(?i)(\\bOR\\b\\s+['\"]?1['\"]?\\s*=\\s*['\"]?1)",
+        "(?i)(\\bUNION\\b\\s+\\bSELECT\\b)",
+        "(?i)(\\bDROP\\b\\s+\\bTABLE\\b)",
+        "(?i)(\\bINFORMATION_SCHEMA\\b)"
+      ],
+      "action": "BLOCK_SESSION_AND_ALERT"
+    },
+    {
+      "id": "GD-POL-05",
+      "name": "Bulk Database Extract / Mass Query Monitoring",
+      "type": "RATE_MONITORING_RULE",
+      "severity": "HIGH",
+      "enabled": true,
+      "threshold_rows": 100,
+      "window_seconds": 60,
+      "action": "ALERT_AND_TAG_HIPAA"
+    }
+  ]
+}
