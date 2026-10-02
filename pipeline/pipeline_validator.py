@@ -15,6 +15,7 @@ Usage:
 import argparse
 import json
 from datetime import datetime, timezone
+import watsonx_loader
 
 # ---------------------------------------------------------------------------
 # Schema definition, grounded in the real reference models
@@ -175,6 +176,8 @@ def main():
     parser.add_argument("--group-id", default="pipeline-validator")
     parser.add_argument("--max-events", type=int, default=None)
     parser.add_argument("--from-beginning", action="store_true")
+    parser.add_argument("--load-to-watsonx", action="store_true",
+                     help="Append CLEAN/FLAGGED events to watsonx.data audit_log")
     args = parser.parse_args()
 
     try:
@@ -197,6 +200,10 @@ def main():
     counts = {"CLEAN": 0, "FLAGGED": 0, "DROPPED": 0}
     processed = 0
 
+    if args.load_to_watsonx:
+        print("Connecting to watsonx.data and ensuring audit_log table exists...")
+        watsonx_loader.ensure_schema()
+        watsonx_loader.ensure_table()
     try:
         for message in consumer:
             result = run_pipeline(message.value)
@@ -208,6 +215,9 @@ def main():
                 print(f"[{processed}] {tag} | issues: {result['issues']} | event: {result['event']}")
             else:
                 print(f"[{processed}] {tag} | event: {result['event']}")
+
+            if args.load_to_watsonx and result["status"] in ("CLEAN", "FLAGGED"):
+                watsonx_loader.load_event(result)
 
             if args.max_events and processed >= args.max_events:
                 break
