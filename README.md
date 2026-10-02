@@ -2,10 +2,13 @@
 
 **IBM watsonx.ai Phase 3 Cornerstone Project - Team 2**
 
-[![Python Unit Tests](https://img.shields.io/badge/Unit%20Tests-10%20Passed-brightgreen)](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/tests)
-[![Security Track](https://img.shields.io/badge/Security-QRadar%20%7C%20Guardium-blue)](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security)
-[![Pipeline Track](https://img.shields.io/badge/Pipeline-Kafka%20%7C%20DataStage%20%7C%20watsonx.data-orange)](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/pipeline)
-[![Compliance](https://img.shields.io/badge/Compliance-HIPAA%2045%20CFR%20§164-red)](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/docs/qradar-guardium-architecture.md)
+[![Python Unit Tests](https://img.shields.io/badge/Unit%20Tests-10%20Passed-brightgreen)](./tests)
+[![Security Track](https://img.shields.io/badge/Security-QRadar%20%7C%20Guardium-blue)](./security)
+[![Pipeline Track](https://img.shields.io/badge/Pipeline-Kafka%20%7C%20DataStage%20%7C%20watsonx.data-orange)](./pipeline)
+[![Compliance](https://img.shields.io/badge/Compliance-HIPAA%2045%20CFR%20%C2%A7164-red)](./docs/qradar-guardium-architecture.md)
+[![Live Dashboard](https://img.shields.io/badge/Dashboard-Live%20on%20Streamlit-ff4b4b)](https://clinical-compliance-dashboard.streamlit.app/)
+
+**🔗 Live Dashboard:** [clinical-compliance-dashboard.streamlit.app](https://clinical-compliance-dashboard.streamlit.app/)
 
 ---
 
@@ -31,7 +34,7 @@ The system delivers two foundational security and compliance capabilities:
 | Team Member | Track | Core Responsibilities |
 |---|---|---|
 | **Joyline Kamoing** | Cybersecurity | QRadar SIEM Custom Rules Engine (CRE), Ariel Query Language (AQL) threat hunting, IBM Security Guardium Database Activity Monitoring (DAM), Dynamic PHI Data Masking, SQL Injection defense |
-| **Fidelmah Mbondo** | Data Science & Analysis | Apache Kafka event streaming, DataStage continuous ETL pipeline (Parse, Cleanse, Normalize, Quality Check), watsonx.data (Apache Iceberg) lakehouse storage, Compliance Analytics layer |
+| **Fidelmah Mbondo** | Data Science & Analysis | Apache Kafka event streaming, DataStage continuous ETL pipeline (Parse, Cleanse, Normalize, Quality Check), watsonx.data (Apache Iceberg) lakehouse storage, Compliance Analytics layer, Streamlit dashboard delivery |
 
 ---
 
@@ -70,12 +73,12 @@ flowchart TD
         DataStage[DataStage Continuous ETL Engine\nParse ➔ Cleanse ➔ Normalize ➔ Quality Check]
         WatsonX[(IBM watsonx.data / Apache Iceberg\nImmutable Audit Log & Security Events)]
         Analytics[Live Compliance Analytics Layer\nRisk Tiers, Violation Trends, Offense Rates]
-        Cognos[IBM Cognos Clinical Security Dashboard]
+        Dashboard[Clinical Security Officer Dashboard\nStreamlit, deployed on Community Cloud]
 
         Kafka -->|Continuous Consumption| DataStage
         DataStage -->|Append-Only Ingestion| WatsonX
         WatsonX -->|Query Metrics| Analytics
-        Analytics -->|Visualize KPI & Alerts| Cognos
+        Analytics -->|Visualize KPI & Alerts| Dashboard
     end
 ```
 
@@ -146,19 +149,19 @@ Every interaction, query, login, and record export is captured in an **append-on
 
 ### Track 1: Cybersecurity & Threat Detection (Joyline Kamoing)
 
-Detailed documentation: [QRadar & Guardium Architecture](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/docs/qradar-guardium-architecture.md) | [Security README](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/README.md)
+Detailed documentation: [QRadar & Guardium Architecture](./docs/qradar-guardium-architecture.md)
 
 #### A. IBM QRadar SIEM Custom Rules Engine (CRE)
-Configured in [`security/qradar/qradar_rules.json`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/qradar/qradar_rules.json) and exported to [`security/qradar/qradar_rules.xml`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/qradar/qradar_rules.xml):
+Configured in [`security/qradar/qradar_rules.json`](./security/qradar/qradar_rules.json) and exported to [`security/qradar/qradar_rules.xml`](./security/qradar/qradar_rules.xml):
 - **`QR-RULE-101` (Unauthorized Chart View):** Flags non-clinical staff attempting to view medical charts (`HIPAA § 164.312(a)(1)`).
 - **`QR-RULE-102` (Bulk Record Exfiltration):** Flags mass downloads (>= 5 patient records within 300 seconds) (`HIPAA § 164.312(b)`).
 - **`QR-RULE-103` (VIP Patient Record Snooping):** Detects access to high-profile/VIP patients by staff outside the assigned care team (`HIPAA § 164.502`).
 - **`QR-RULE-104` (Off-Hours High-Volume EHR Query):** Detects off-hours access (22:00–05:00 UTC) by non-shift personnel (`HIPAA § 164.308(a)(1)(ii)(D)`).
 - **`QR-RULE-105` (Multi-Patient Sequential Scraping):** Flags automated bot-like scraping querying >= 4 distinct patient records in < 60 seconds (`HIPAA § 164.312(e)(1)`).
-- **Ariel Query Language (AQL):** Threat hunting queries in [`security/qradar/aql_queries.sql`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/qradar/aql_queries.sql).
+- **Ariel Query Language (AQL):** Threat hunting queries in [`security/qradar/aql_queries.sql`](./security/qradar/aql_queries.sql).
 
 #### B. IBM Security Guardium DAM & S-TAP Security Policies
-Configured in [`security/guardium/guardium_policies.yaml`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/guardium/guardium_policies.yaml):
+Configured in [`security/guardium/guardium_policies.yaml`](./security/guardium/guardium_policies.yaml):
 - **`GD-POL-01`:** Direct unauthorized table access detection.
 - **`GD-POL-02`:** Dynamic SSN / National ID masking.
 - **`GD-POL-03`:** Dynamic clinical history & psychiatric note redaction.
@@ -166,7 +169,7 @@ Configured in [`security/guardium/guardium_policies.yaml`](file:///c:/Users/Admi
 - **`GD-POL-05`:** Query rate anomaly monitoring (> 100 rows/min).
 
 #### C. Threat Scenarios & Simulation Suite
-Defined in [`security/threat_scenarios.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/threat_scenarios.py) and executed via [`security/threat_ingestion.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/threat_ingestion.py):
+Defined in [`security/threat_scenarios.py`](./security/threat_scenarios.py) and executed via [`security/threat_ingestion.py`](./security/threat_ingestion.py):
 1. `unauthorized_chart_view`: Billing clerk snooping on clinical psychiatric chart.
 2. `bulk_download`: Nurse executing off-hours mass oncology exfiltration.
 3. `vip_snooping`: Lab tech snooping on VIP senator record without care team membership.
@@ -178,26 +181,38 @@ Defined in [`security/threat_scenarios.py`](file:///c:/Users/Administrator/healt
 
 ### Track 2: Data Pipeline & Compliance Analytics (Fidelmah Mbondo)
 
-Detailed documentation: [Handoff Notes](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/docs/handoff-notes.md) | [DataStage Design](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/docs/datastage-design.md)
+Detailed documentation: [Handoff Notes](./docs/handoff-notes.md) | [DataStage Design](./docs/datastage-design.md)
 
 #### A. Stream Ingestion & Local Kafka Broker
-- Containerized Apache Kafka broker running in **KRaft mode** via [`pipeline/docker-compose.yml`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/pipeline/docker-compose.yml).
+- Containerized Apache Kafka broker running in **KRaft mode** via [`pipeline/docker-compose.yml`](./pipeline/docker-compose.yml).
 - Dedicated ingestion topic: `healthcare-security-events`.
-- Mock event generator in [`pipeline/mock_event_generator.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/pipeline/mock_event_generator.py) generating realistic baseline & anomaly traffic.
+- Mock event generator in [`pipeline/mock_event_generator.py`](./pipeline/mock_event_generator.py) generating realistic baseline & anomaly traffic.
 
 #### B. DataStage ETL Pipeline Logic
-Implemented and validated in [`pipeline/pipeline_validator.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/pipeline/pipeline_validator.py) mirroring the 4 DataStage stages:
+Implemented and validated in [`pipeline/pipeline_validator.py`](./pipeline/pipeline_validator.py) mirroring the 4 DataStage stages:
 1. **Parse:** Decode raw JSON/CSV and catch malformed messages.
 2. **Cleanse:** Standardize timestamps to UTC ISO-8601, normalize casing, coerce booleans.
 3. **Normalize:** Map EHR, portal, lab, and prescription schemas to a unified record structure.
 4. **Quality Check:** Validate required fields, allowed roles, and record types (`CLEAN`, `FLAGGED`, `DROPPED`).
 
-#### C. Compliance Analytics Engine (watsonx.data / Presto SQL)
+#### C. watsonx.data Loader
+[`pipeline/watsonx_loader.py`](./pipeline/watsonx_loader.py) handles the connection to watsonx.data and loads cleansed records into the `healthcare_security_catalog.default.audit_log` Iceberg table. Credentials are pulled from environment variables (see `.env.example`).
+
+#### D. Compliance Analytics Engine (watsonx.data / Presto SQL)
 Pre-aggregated analytics powering the Clinical Security Officer Dashboard:
 - **Violation Trends:** Daily & hourly unauthorized access counts.
 - **Risk Tier Breakdown:** Distribution of `HIGH`, `MEDIUM`, `LOW` security incidents.
 - **Top Policy Violators:** Identification of users triggering repeat QRadar offenses.
 - **Audit Investigation Feed:** Real-time query log for immediate forensic response.
+
+#### E. Clinical Security Officer Dashboard (Streamlit)
+Deployed to **Streamlit Community Cloud** as a free public app. The dashboard displays live-captured watsonx.data query results across the four analytics views above, plus a running audit investigation feed.
+
+- **Live URL:** https://clinical-compliance-dashboard.streamlit.app/
+- **Source:** [`dashboard/dashboard_app.py`](./dashboard/dashboard_app.py)
+- **Dependencies:** [`dashboard/requirements.txt`](./dashboard/requirements.txt)
+
+> **Note on data sourcing:** The dashboard uses real results that were pulled from watsonx.data while the TechZone environment was active. Because the reservation has since expired, the app runs in a "captured results" mode with each underlying SQL query documented in code comments. When a live environment is available again, setting `USE_LIVE_DATA = True` and filling in `run_live_query()` reconnects the dashboard without any other changes.
 
 ---
 
@@ -206,32 +221,43 @@ Pre-aggregated analytics powering the Clinical Security Officer Dashboard:
 ```
 healthcare-data-security-compliance-hub/
 ├── README.md                              # Main project documentation & architecture overview
+├── .gitignore                             # Git ignore rules
+│
+├── dashboard/                             # Clinical Security Officer Dashboard (Fidelmah)
+│   ├── dashboard_app.py                   # Streamlit dashboard with captured watsonx.data results
+│   └── requirements.txt                   # Streamlit Cloud dependencies (streamlit, pandas, plotly)
+│
 ├── docs/                                  # Technical documentation & handoff notes
 │   ├── qradar-guardium-architecture.md    # In-depth security architecture & demo scripts (Joyline)
 │   ├── handoff-notes.md                   # Pipeline implementation & validation notes (Fidelmah)
 │   └── datastage-design.md                # DataStage ETL stage design & mapping specs
+│
 ├── pipeline/                              # Data engineering & stream processing (Fidelmah)
+│   ├── .env                               # Local environment secrets (not committed)
+│   ├── .env.example                       # Template for environment variables
 │   ├── docker-compose.yml                 # Local Kafka broker (KRaft mode)
 │   ├── mock_event_generator.py            # QRadar/Guardium mock stream generator
-│   └── pipeline_validator.py              # 4-stage DataStage transformation validator
-└── security/                              # Cybersecurity & threat detection (Joyline)
-    ├── README.md                          # Security track guide
-    ├── threat_ingestion.py                # Main CLI service for threat analysis & Kafka bridge
-    ├── threat_scenarios.py                # Curated realistic attack & baseline scenarios
-    ├── qradar/
-    │   ├── qradar_rules.json              # QRadar SIEM Custom Rules Engine (CRE) rules
-    │   ├── qradar_rules.xml               # QRadar XML Content Management Export
-    │   ├── aql_queries.sql                # Ariel Query Language (AQL) threat hunting queries
-    │   └── qradar_engine.py               # QRadar offense simulator & rule evaluator
-    ├── guardium/
-    │   ├── guardium_policies.yaml         # Guardium DAM & S-TAP security policies (YAML)
-    │   ├── guardium_policies.json         # Guardium DAM policies (JSON)
-    │   ├── phi_masker.py                  # Dynamic role-based PHI data masking engine
-    │   └── guardium_engine.py             # Guardium S-TAP monitor & SQLi filter
-    └── tests/
-        ├── test_qradar_rules.py           # Unit tests for QRadar anomaly detection rules
-        ├── test_guardium_masking.py       # Unit tests for Guardium PHI masking & DAM
-        └── test_pipeline_integration.py   # E2E integration test for DataStage schema compatibility
+│   ├── pipeline_validator.py              # 4-stage DataStage transformation validator
+│   └── watsonx_loader.py                  # watsonx.data connection & Iceberg loader
+│
+├── security/                              # Cybersecurity & threat detection (Joyline)
+│   ├── threat_ingestion.py                # Main CLI service for threat analysis & Kafka bridge
+│   ├── threat_scenarios.py                # Curated realistic attack & baseline scenarios
+│   ├── qradar/
+│   │   ├── qradar_rules.json              # QRadar SIEM Custom Rules Engine (CRE) rules
+│   │   ├── qradar_rules.xml               # QRadar XML Content Management Export
+│   │   ├── aql_queries.sql                # Ariel Query Language (AQL) threat hunting queries
+│   │   └── qradar_engine.py               # QRadar offense simulator & rule evaluator
+│   └── guardium/
+│       ├── guardium_policies.yaml         # Guardium DAM & S-TAP security policies (YAML)
+│       ├── guardium_policies.json         # Guardium DAM policies (JSON)
+│       ├── phi_masker.py                  # Dynamic role-based PHI data masking engine
+│       └── guardium_engine.py             # Guardium S-TAP monitor & SQLi filter
+│
+└── tests/                                 # Automated test suite
+    ├── test_qradar_rules.py               # Unit tests for QRadar anomaly detection rules
+    ├── test_guardium_masking.py           # Unit tests for Guardium PHI masking & DAM
+    └── test_pipeline_integration.py       # E2E integration test for DataStage schema compatibility
 ```
 
 ---
@@ -242,11 +268,12 @@ healthcare-data-security-compliance-hub/
 - Python 3.10+
 - Docker & Docker Compose
 - Required Python packages: `pip install kafka-python pyyaml`
+- For the dashboard: `pip install streamlit pandas plotly`
 
 ### 1. Run the Security & Integration Test Suite
 Verify QRadar rules, Guardium masking, and DataStage schema compatibility:
 ```bash
-python -m unittest discover -s security/tests -p "test_*.py" -v
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 ### 2. Execute Threat Detection & PHI Masking (Dry Run)
@@ -282,6 +309,21 @@ Validate DataStage continuous-mode ingestion and 4-stage data cleansing:
 python pipeline/pipeline_validator.py --from-beginning
 ```
 
+### 6. Load Cleansed Records into watsonx.data
+After configuring `.env` with your watsonx.data credentials:
+```bash
+python pipeline/watsonx_loader.py
+```
+
+### 7. Launch the Dashboard Locally (optional)
+```bash
+cd dashboard
+pip install -r requirements.txt
+streamlit run dashboard_app.py
+```
+
+Or open the live deployment: https://clinical-compliance-dashboard.streamlit.app/
+
 ---
 
 ## Project Status & Roadmap
@@ -295,9 +337,9 @@ python pipeline/pipeline_validator.py --from-beginning
 - [x] **Threat Scenarios & Bridge:** 6 curated clinical attack scenarios with dry-run and Kafka live streaming CLI.
 - [x] **DataStage Transform Logic:** Parse, cleanse, normalize, and quality-check stages validated locally.
 - [x] **Automated Test Suite:** 10/10 unit and integration tests passing.
-- [x] **watsonx.data Iceberg tables loaded** (audit_log, healthcare_security_catalog)
-- [x] **Compliance analytics queries** (violation trends, risk tiers, top violators, facility breakdown)
-- [x] **Dashboard built** (Streamlit, pivoted from Cognos after TechZone environment expired - see docs/handoff-notes.md for details)
+- [x] **watsonx.data Iceberg tables loaded** (audit_log, healthcare_security_catalog).
+- [x] **Compliance analytics queries** (violation trends, risk tiers, top violators, facility breakdown).
+- [x] **Dashboard built and deployed:** Streamlit app is live at [clinical-compliance-dashboard.streamlit.app](https://clinical-compliance-dashboard.streamlit.app/). Pivoted from Cognos after the TechZone environment expired. See [`docs/handoff-notes.md`](./docs/handoff-notes.md) for details.
 - [ ] **End-to-End Live Incident Flow Demo.**
 
 ---
@@ -309,6 +351,6 @@ python pipeline/pipeline_validator.py --from-beginning
 | **0:00 – 2:00** | Problem & Regulatory Context | Both | Healthcare insider threats, HIPAA Minimum Necessary standard, project goals. |
 | **2:00 – 6:00** | Cybersecurity & RBAC Enforcement | Joyline | QRadar CRE anomaly offenses (`QR-RULE-101` unauthorized view, `102` bulk exfiltration, `103` VIP snooping), Guardium SQL injection block, role-based PHI dynamic masking (Billing Clerk vs. Physician). |
 | **6:00 – 9:00** | Data Pipeline & Ingestion | Fidelmah | Kafka event streaming, DataStage 4-stage transform logic (Parse ➔ Cleanse ➔ Normalize ➔ Quality Check), handling malformed vs. anomalous data. |
-| **9:00 – 12:00** | Immutable Audit Log & watsonx.data Analytics | Fidelmah | watsonx.data Iceberg storage, compliance analytics queries (risk tier breakdown, violation trends), Streamlit dashboard. |
+| **9:00 – 12:00** | Immutable Audit Log & watsonx.data Analytics | Fidelmah | watsonx.data Iceberg storage, compliance analytics queries (risk tier breakdown, violation trends), live Streamlit dashboard walkthrough. |
 | **12:00 – 14:00** | End-to-End Incident Flow | Both | Trigger simulated attack scenario ➔ Guardium masks/blocks ➔ QRadar flags offense ➔ Kafka streams ➔ DataStage cleanses ➔ watsonx.data audit log appends ➔ Dashboard alerts update. |
 | **14:00 – 15:00** | Q&A and Wrap-up | Both | Review of architecture, key takeaways, and lessons learned. |
