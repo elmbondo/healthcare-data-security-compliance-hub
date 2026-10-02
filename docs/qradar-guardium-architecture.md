@@ -1,7 +1,7 @@
 # QRadar SIEM & IBM Security Guardium Architecture (Joyline)
 
-**Track:** Cybersecurity / IBM watsonx.ai Phase 3, Team 2  
-**Author:** Joyline Kamoing  
+**Track:** Cybersecurity / IBM watsonx.ai Phase 3, Team 2
+**Author:** Joyline Kamoing
 **Core Responsibilities:** QRadar SIEM anomaly detection rules, IBM Security Guardium real-time Database Activity Monitoring (DAM), Dynamic Protected Health Information (PHI) masking, and HIPAA-compliant telemetry generation for immutable audit logging.
 
 ---
@@ -46,7 +46,7 @@ flowchart TD
         Kafka[(Kafka Topic:\nhealthcare-security-events)]
         DataStage[DataStage ETL: Cleanse & Quality Check]
         Watsonx[(watsonx.data / Iceberg Immutable Audit Log)]
-        Cognos[Cognos Clinical Security Dashboard]
+        Dashboard[Clinical Security Officer Dashboard\nStreamlit, deployed on Community Cloud]
     end
 
     Client --> EHR
@@ -56,7 +56,7 @@ flowchart TD
     DDM --> Forwarder
     CRE --> Forwarder
     Forwarder --> Kafka
-    Kafka --> DataStage --> Watsonx --> Cognos
+    Kafka --> DataStage --> Watsonx --> Dashboard
 ```
 
 ---
@@ -91,7 +91,7 @@ The system implements rigorous role-based access controls mapped to **HIPAA Priv
 
 ## 3. QRadar SIEM Custom Rules Engine (CRE)
 
-Located in [`security/qradar/qradar_rules.json`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/qradar/qradar_rules.json) and [`security/qradar/qradar_rules.xml`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/qradar/qradar_rules.xml).
+Located in [`security/qradar/qradar_rules.json`](./security/qradar/qradar_rules.json) and [`security/qradar/qradar_rules.xml`](./security/qradar/qradar_rules.xml).
 
 | Rule ID | Rule Name | Trigger Conditions | Severity / Magnitude | Compliance Tag |
 |---|---|---|---|---|
@@ -103,13 +103,13 @@ Located in [`security/qradar/qradar_rules.json`](file:///c:/Users/Administrator/
 
 ### Ariel Query Language (AQL) Threat Hunting Queries
 
-Exported in [`security/qradar/aql_queries.sql`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/qradar/aql_queries.sql) for SOC analysts and compliance investigators.
+Exported in [`security/qradar/aql_queries.sql`](./security/qradar/aql_queries.sql) for SOC analysts and compliance investigators.
 
 ---
 
 ## 4. IBM Security Guardium Real-Time DAM & S-TAP Policies
 
-Located in [`security/guardium/phi_masker.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/guardium/phi_masker.py), [`security/guardium/guardium_policies.yaml`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/guardium/guardium_policies.yaml), and [`security/guardium/guardium_engine.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/guardium/guardium_engine.py).
+Located in [`security/guardium/phi_masker.py`](./security/guardium/phi_masker.py), [`security/guardium/guardium_policies.yaml`](./security/guardium/guardium_policies.yaml), and [`security/guardium/guardium_engine.py`](./security/guardium/guardium_engine.py).
 
 - **GD-POL-01:** Direct DB Table Access by Unauthorized Accounts (`reporting_readonly`, `guest_user`).
 - **GD-POL-02:** Dynamic Data Masking for SSNs and National Identifiers.
@@ -132,7 +132,7 @@ Every access request, database query, authentication attempt, and policy violati
 
 ## 6. Threat Ingestion & Scenarios
 
-The simulator in [`security/threat_ingestion.py`](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/threat_ingestion.py) provides 6 curated scenarios:
+The simulator in [`security/threat_ingestion.py`](./security/threat_ingestion.py) provides 6 curated scenarios:
 
 1. `unauthorized_chart_view`: Billing clerk snooping on clinical psychiatric chart.
 2. `bulk_download`: Nurse executing mass oncology export at 23:15 UTC.
@@ -145,7 +145,7 @@ The simulator in [`security/threat_ingestion.py`](file:///c:/Users/Administrator
 
 ```bash
 # 1. Run all unit and integration tests
-python -m unittest discover -s security/tests -p "test_*.py" -v
+python -m unittest discover -s tests -p "test_*.py" -v
 
 # 2. Run threat simulator in dry-run mode
 python security/threat_ingestion.py --mode dry-run --scenario all
