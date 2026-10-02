@@ -1,8 +1,8 @@
 # DataStage Job Plan & watsonx.data Architecture (Fidelmah)
 
-**Author:** Fidelmah Mbondo  
-**Track:** Data Science & Analysis / IBM watsonx.ai Phase 3, Team 2  
-**Core Responsibilities:** Kafka streaming ingestion, DataStage continuous ETL pipeline, watsonx.data (Apache Iceberg) immutable audit storage, and live Compliance Analytics engine.
+**Author:** Fidelmah Mbondo
+**Track:** Data Science & Analysis / IBM watsonx.ai Phase 3, Team 2
+**Core Responsibilities:** Kafka streaming ingestion, DataStage continuous ETL pipeline, watsonx.data (Apache Iceberg) immutable audit storage, and live Compliance Analytics engine feeding the Clinical Security Officer Dashboard.
 
 ---
 
@@ -72,7 +72,7 @@ PARTITIONED BY (event_date);
 
 ## 4. Compliance Analytics Layer & SQL Queries
 
-The live compliance analytics layer queries the `audit_log` table via Presto / Trino in watsonx.data to feed the **IBM Cognos Clinical Security Officer Dashboard**.
+The live compliance analytics layer queries the `audit_log` table via Presto / Trino in watsonx.data to feed the **Clinical Security Officer Dashboard** (Streamlit, deployed to Streamlit Community Cloud).
 
 ### Query 1: Daily Violation Trend
 ```sql
@@ -143,3 +143,13 @@ LIMIT 25;
 | **HIGH** | Unauthorized cross-facility access (`golden_id`), `mdm_resolve`, `dispatch_referral`, bulk downloads | `QR-RULE-102`, `QR-RULE-103` offenses |
 | **MEDIUM** | Unauthorized single-facility record lookup, off-hours access | `QR-RULE-101`, `QR-RULE-104` offenses |
 | **LOW** | Authorized clinical activity, routine logins | Normal physician patient view |
+
+---
+
+## 6. Dashboard Delivery Note
+
+The dashboard that consumes these queries was originally designed for IBM Cognos, but was delivered as a **Streamlit app** deployed to Streamlit Community Cloud after the TechZone reservation expired.
+
+- **Live URL:** https://clinical-compliance-dashboard.streamlit.app/
+- **Source:** `dashboard/dashboard_app.py`
+- **Query documentation:** Each chart in the dashboard has its corresponding SQL query documented inline as code comments.
