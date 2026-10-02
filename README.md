@@ -1,6 +1,6 @@
 # Healthcare Data Security & Compliance Hub
 
-**IBM watsonx.ai Phase 3 Cornerstone Project — Team 2**
+**IBM watsonx.ai Phase 3 Cornerstone Project - Team 2**
 
 [![Python Unit Tests](https://img.shields.io/badge/Unit%20Tests-10%20Passed-brightgreen)](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security/tests)
 [![Security Track](https://img.shields.io/badge/Security-QRadar%20%7C%20Guardium-blue)](file:///c:/Users/Administrator/healthcare-data-security-compliance-hub/security)
@@ -295,9 +295,9 @@ python pipeline/pipeline_validator.py --from-beginning
 - [x] **Threat Scenarios & Bridge:** 6 curated clinical attack scenarios with dry-run and Kafka live streaming CLI.
 - [x] **DataStage Transform Logic:** Parse, cleanse, normalize, and quality-check stages validated locally.
 - [x] **Automated Test Suite:** 10/10 unit and integration tests passing.
-- [ ] **TechZone Deployment:** DataStage job deployment and connection to cloud broker.
-- [ ] **watsonx.data Lakehouse:** Iceberg table provisioning and audit log ingest.
-- [ ] **Compliance Analytics & Cognos Dashboard:** Visualizing real-time violation trends and risk tiers.
+- [x] **watsonx.data Iceberg tables loaded** (audit_log, healthcare_security_catalog)
+- [x] **Compliance analytics queries** (violation trends, risk tiers, top violators, facility breakdown)
+- [x] **Dashboard built** (Streamlit, pivoted from Cognos after TechZone environment expired - see docs/handoff-notes.md for details)
 - [ ] **End-to-End Live Incident Flow Demo.**
 
 ---
@@ -309,6 +309,6 @@ python pipeline/pipeline_validator.py --from-beginning
 | **0:00 – 2:00** | Problem & Regulatory Context | Both | Healthcare insider threats, HIPAA Minimum Necessary standard, project goals. |
 | **2:00 – 6:00** | Cybersecurity & RBAC Enforcement | Joyline | QRadar CRE anomaly offenses (`QR-RULE-101` unauthorized view, `102` bulk exfiltration, `103` VIP snooping), Guardium SQL injection block, role-based PHI dynamic masking (Billing Clerk vs. Physician). |
 | **6:00 – 9:00** | Data Pipeline & Ingestion | Fidelmah | Kafka event streaming, DataStage 4-stage transform logic (Parse ➔ Cleanse ➔ Normalize ➔ Quality Check), handling malformed vs. anomalous data. |
-| **9:00 – 12:00** | Immutable Audit Log & watsonx.data Analytics | Fidelmah | watsonx.data Iceberg storage, compliance analytics queries (risk tier breakdown, violation trends), Cognos dashboard. |
+| **9:00 – 12:00** | Immutable Audit Log & watsonx.data Analytics | Fidelmah | watsonx.data Iceberg storage, compliance analytics queries (risk tier breakdown, violation trends), Streamlit dashboard. |
 | **12:00 – 14:00** | End-to-End Incident Flow | Both | Trigger simulated attack scenario ➔ Guardium masks/blocks ➔ QRadar flags offense ➔ Kafka streams ➔ DataStage cleanses ➔ watsonx.data audit log appends ➔ Dashboard alerts update. |
 | **14:00 – 15:00** | Q&A and Wrap-up | Both | Review of architecture, key takeaways, and lessons learned. |
